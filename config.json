@@ -1,9 +1,9 @@
 {
   "botName": "InstaBOT",
-  "prefix": "-",
+  "prefix": "#",
   "language": "en",
-  "adminBot": [],
-  "nickNameOnStart": "InstaBOT",
+  "adminBot": [33790118865],
+  "nickNameOnStart": "zeyphex bot 😙💋",
   "env": {
     "token": "chat.api.toke.neokex.ica.token.can.change.a9y.2ime.ok",
     "url": "https://nkx-ica.neokex.xyz",
