@@ -145,5 +145,19 @@
     "tokenRefreshInterval": 600000,
     "proxy": null,
     "notes": "Options passed to @lazyneoaz/ig-chat-api.login(). See https://www.npmjs.com/package/@lazyneoaz/ig-chat-api for the full option list and keep-alive / token-refresh settings. minRequestInterval (ms) spaces every API call so a command burst cannot look like automation. Engine-internal keys (proxy, dgwHost, userAgent, ...) are server-owned and ignored by the hosted client; the server applies its own proxy, so a datacenter host should be configured there."
+  },
+  "customFeatures": {
+    "unsendOnReaction": {
+      "enable": false,
+      "reactions": [
+        "😠",
+        "😡"
+      ],
+      "notes": "when a bot admin (role 2) reacts to a message the bot sent with one of the reactions below, the bot unsends that message. Add/remove emojis in the reactions array to change which ones trigger it. Toggle with the unsendonreaction command."
+    },
+    "noPrefix": {
+      "enable": false,
+      "notes": "allow bot admins (role 2) to use commands without a prefix. Normal messages are never treated as commands: a message only runs a command when its first word exactly matches a command name or alias (e.g. \"help\" instead of \"-help\"). Toggle with the noprefix command."
+    }
   }
 }

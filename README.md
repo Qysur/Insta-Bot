@@ -146,6 +146,21 @@ Then send the prefix (default `-`) followed by a command in an Instagram DM.
   check exits the bot hard when GitHub is unreachable. Enable it only if you
   know what you are doing.
 
+- `customFeatures` — two **admin-only** quality-of-life switches (both off by
+  default):
+
+  - **`unsendOnReaction`** — when a bot admin reacts to a message the bot sent
+    with one of the configured emojis (default 😠 / 😡), the bot unsends that
+    message. Works on any message the bot sent (command replies, random sends,
+    game prompts). Configure the trigger emojis in
+    `customFeatures.unsendOnReaction.reactions`, or toggle it with
+    `-unsendonreaction [on | off | status]`.
+  - **`noPrefix`** — lets a **bot admin** run a command by sending its exact
+    name or alias with no prefix (e.g. `help` instead of `-help`). Normal chat is
+    never treated as a command: a message only runs when its first word exactly
+    matches a command name or alias, so `hello how are you` is ignored. Toggle it
+    with `-noprefix [on | off | status]`. Non-admins always need the prefix.
+
 Google credentials (`config.json` → `credentials.gmailAccount`,
 `credentials.gRecaptcha`) are **optional**: Gmail notifications / dashboard OTP
 and Google Drive upload are disabled when they are empty or absent, and the bot

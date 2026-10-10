@@ -15,6 +15,29 @@ function getRole(threadData, senderID) {
 	return adminBot.includes(senderID) ? 2 : adminBox.includes(senderID) ? 1 : 0;
 }
 
+// Strip the emoji variation selector so "😠️" and "😠" match.
+function normalizeReaction(value) {
+	return String(value || "").replace(/\uFE0F/g, "");
+}
+
+// Instagram can deliver the same reaction delta twice (echo + stream) within a
+// few hundred ms; ignore a repeat of the same (message, reactor, emoji) so the
+// bot does not try to unsend the same message twice.
+const recentReactionEvents = new Map();
+function isDuplicateReactionEvent(key) {
+	const now = Date.now();
+	const last = recentReactionEvents.get(key);
+	if (last && now - last < 4000)
+		return true;
+	recentReactionEvents.set(key, now);
+	if (recentReactionEvents.size > 500) {
+		for (const [k, t] of recentReactionEvents)
+			if (now - t > 4000)
+				recentReactionEvents.delete(k);
+	}
+	return false;
+}
+
 function getText(type, reason, time, targetID, lang) {
 	const utils = global.utils;
 	if (type == "userBanned")
@@ -213,13 +236,23 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 		let isUserCallCommand = false;
 		async function onStart() {
 			// —————————————— CHECK USE BOT —————————————— //
-			if (!body || !body.startsWith(prefix))
+			if (!body)
+				return;
+			// noPrefix is admin-only. Even enabled, only an exact command name/alias
+			// runs; a normal chat message is never treated as a command.
+			const customFeatures = config.customFeatures || {};
+			const noPrefixEnabled = customFeatures.noPrefix && customFeatures.noPrefix.enable == true && Number(role) === 2;
+			const hasPrefix = body.startsWith(prefix);
+			if (!hasPrefix && !noPrefixEnabled)
 				return;
 			const dateNow = Date.now();
-			const args = body.slice(prefix.length).trim().split(/ +/);
+			const args = hasPrefix ? body.slice(prefix.length).trim().split(/ +/) : body.trim().split(/ +/);
 			// ————————————  CHECK HAS COMMAND ——————————— //
-			let commandName = args.shift().toLowerCase();
+			let commandName = (args.shift() || "").toLowerCase();
 			let command = GoatBot.commands.get(commandName) || GoatBot.commands.get(GoatBot.aliases.get(commandName));
+			// ———— noPrefix: only an exact command name/alias runs, never normal chat ———— //
+			if (!hasPrefix && !command)
+				return;
 			// ———————— CHECK ALIASES SET BY GROUP ———————— //
 			const aliasesData = threadData.data.aliases || {};
 			for (const cmdName in aliasesData) {
@@ -386,8 +419,10 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 		async function onAnyEvent() {
 			const allOnAnyEvent = GoatBot.onAnyEvent || [];
 			let args = [];
-			if (typeof event.body == "string" && event.body.startsWith(prefix))
-				args = event.body.split(/ +/);
+			const customFeatures = config.customFeatures || {};
+			const noPrefixEnabled = customFeatures.noPrefix && customFeatures.noPrefix.enable == true && Number(role) === 2;
+			if (typeof event.body == "string" && (event.body.startsWith(prefix) || noPrefixEnabled))
+				args = event.body.trim().split(/ +/);
 
 			for (const key of allOnAnyEvent) {
 				if (typeof key !== "string")
@@ -559,7 +594,62 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 		 |                   ON REACTION                  |
 		 +------------------------------------------------+
 		*/
+		// Admin-only: when a bot admin (role 2) reacts to a message the bot sent
+		// with a configured emoji (default 😠/😡), unsend that message.
+		async function handleCustomReaction() {
+			const customFeatures = config.customFeatures || {};
+			const unsendCfg = customFeatures.unsendOnReaction || {};
+			if (unsendCfg.enable != true)
+				return;
+
+			const botID = api.getCurrentUserID && api.getCurrentUserID();
+			const reactor = event.userID || event.senderID || event.author;
+			const emoji = event.reaction;
+			const targetID = event.messageID;
+			if (!reactor || reactor == botID || !emoji || !targetID)
+				return;
+			if (getRole(threadData, reactor) !== 2)
+				return;
+			if (isDuplicateReactionEvent(`${targetID}|${reactor}|${normalizeReaction(emoji)}`))
+				return;
+
+			const tracked = GoatBot.botSentMessages;
+			const isBotMessage = !!(tracked && tracked.has(String(targetID)));
+			const isReactionPrompt = !!(GoatBot.onReaction && GoatBot.onReaction.has(targetID));
+			if (!isBotMessage && !isReactionPrompt)
+				return;
+			const reactions = Array.isArray(unsendCfg.reactions) && unsendCfg.reactions.length
+				? unsendCfg.reactions.map(normalizeReaction)
+				: ["\u{1F620}", "\u{1F621}"];
+			if (!reactions.includes(normalizeReaction(emoji)))
+				return;
+
+			try {
+				await api.unsendMessage(targetID);
+			}
+			catch (err) {
+				try {
+					await api.unsendMessage(event.threadID, targetID);
+				}
+				catch (_) { }
+			}
+			if (isReactionPrompt) {
+				try {
+					GoatBot.onReaction.delete(targetID);
+				}
+				catch (_) { }
+			}
+		}
+
 		async function onReaction() {
+			// ————— CUSTOM ADMIN REACTION FEATURES ————— //
+			try {
+				await handleCustomReaction();
+			}
+			catch (err) {
+				log.err("CUSTOM_REACTION", "An error occurred while handling a custom reaction", err);
+			}
+
 			const { onReaction } = GoatBot;
 			const Reaction = onReaction.get(messageID);
 			if (!Reaction)
