@@ -6,7 +6,7 @@ const MAX_SIZE = 25 * 1024 * 1024;
 module.exports = {
 	config: {
 		name: "sing",
-		aliases: ["singvoice", "voicesong", "singsong", "song"],
+		aliases: [],
 		version: "2.3",
 		author: "Neoaz 🐊",
 		countDown: 5,
